@@ -22,9 +22,9 @@ static mat4 scaleMat = mat4(1.f);
 static mat4 translateMat = mat4(1.f);
 static bool imguiHovered = false;
 
-// TODO
 bool isImguiHovered(const vec2& mouse) {
-  return false;
+  auto& io = ImGui::GetIO();
+  return io.WantCaptureMouse || io.WantCaptureKeyboard;
 }
 
 void resizeCallback(GLFWwindow* window, int width, int height) {
@@ -41,17 +41,17 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
 }
 
 void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos) {
-  if (imguiHovered)
-    return;
-
   static bool isHoldingButton = false;
   static vec3 prevPos = {0.f, 0.f, 0.f};
+
   vec3 currPos = {xpos, ypos, 0.f};
 
-  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-    vec3 toMove = (currPos - prevPos * glm::sign(currPos)) * dt * panMoveScale;
-    toMove.y *= -1.f;
-    translateMat = glm::translate(translateMat, toMove);
+  if (!imguiHovered) {
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+      vec3 toMove = (currPos - prevPos * glm::sign(currPos)) * dt * panMoveScale;
+      toMove.y *= -1.f;
+      translateMat = glm::translate(translateMat, toMove);
+    }
   }
 
   prevPos = currPos;
@@ -59,7 +59,6 @@ void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos) {
 
 int main() {
   // Assuming the executable is launching from its own directory
-  // SetCurrentDirectory("../../../src");
   _chdir("../../../src");
 
   // GLFW init
@@ -184,10 +183,8 @@ int main() {
     mainShader.setUniform1f(4, worldRadius);
 
     glClearColor(0.f, 0.f, 0.f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    glClear(GL_COLOR_BUFFER_BIT);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
 
     ImGui::Begin("Settings");
 
