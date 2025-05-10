@@ -13,6 +13,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
+
 constexpr vec2 scaleLimit{0.5f, 5.f};
 constexpr float scaleAmount = 0.1f;
 constexpr float panMoveScale = 0.3f;
@@ -22,40 +25,13 @@ static mat4 scaleMat = mat4(1.f);
 static mat4 translateMat = mat4(1.f);
 static bool imguiHovered = false;
 
-bool isImguiHovered(const vec2& mouse) {
-  auto& io = ImGui::GetIO();
-  return io.WantCaptureMouse || io.WantCaptureKeyboard;
-}
+void resizeCallback(GLFWwindow* window, int width, int height);
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos);
 
-void resizeCallback(GLFWwindow* window, int width, int height) {
-  glViewport(0, 0, width, height);
-}
+bool isImguiHovered(const vec2& mouse);
 
-void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
-  static float prevScale = 1.f;
-  float scale = prevScale + yoffset * scaleAmount;
-  scale = std::clamp(scale, scaleLimit.x, scaleLimit.y);
-  float scaleFactor = scale / prevScale;
-  scaleMat = glm::scale(scaleMat, vec3(scaleFactor));
-  prevScale = scale;
-}
-
-void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos) {
-  static bool isHoldingButton = false;
-  static vec3 prevPos = {0.f, 0.f, 0.f};
-
-  vec3 currPos = {xpos, ypos, 0.f};
-
-  if (!imguiHovered) {
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-      vec3 toMove = (currPos - prevPos * glm::sign(currPos)) * dt * panMoveScale;
-      toMove.y *= -1.f;
-      translateMat = glm::translate(translateMat, toMove);
-    }
-  }
-
-  prevPos = currPos;
-}
+void produceHeightmap();
 
 int main() {
   // Assuming the executable is launching from its own directory
@@ -78,7 +54,7 @@ int main() {
     return EXIT_FAILURE;
   }
   glfwMakeContextCurrent(window);
-  // glfwSetCursorPos(window, winCenter.x, winSize.y * 0.5f);
+  glfwSetCursorPos(window, winCenter.x, winCenter.y);
   glfwSetFramebufferSizeCallback(window, resizeCallback);
   glfwSetScrollCallback(window, scrollCallback);
   glfwSetCursorPosCallback(window, mouseCursorCallback);
@@ -99,11 +75,12 @@ int main() {
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init();
 
-  float seaLevel = 20.f;
+  float seaLevel = -20.f;
   float heightMutliplier = 12.f;
   float worldRadius = 50.f;
 
   Shader mainShader("main.vert", "main.frag");
+  Shader mainComputeShader("main.comp");
   mainShader.setUniformTexture(0, 0);
 
   int w, h, colorChannels;
@@ -114,11 +91,12 @@ int main() {
   glGenTextures(1, &heightmapTexture);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, heightmapTexture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
+  glBindTexture(GL_TEXTURE_2D, 0);
   stbi_image_free(pixels);
 
   float vertices[30] {
@@ -184,13 +162,23 @@ int main() {
 
     glClearColor(0.f, 0.f, 0.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindTexture(GL_TEXTURE_2D, heightmapTexture);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     ImGui::Begin("Settings");
 
     ImGui::SliderFloat("seaLevel", &seaLevel, -100.f, 100.f);
     ImGui::SliderFloat("heightMutliplier", &heightMutliplier, 0.f, 100.f);
     ImGui::SliderFloat("worldRadius", &worldRadius, 1.f, 100.f);
+    if (ImGui::Button("Produce")) {
+      mainComputeShader.setUniformTexture("heightmap", 0);
+      mainComputeShader.setUniform1f("seaLevel", seaLevel);
+      mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
+      mainComputeShader.setUniform1f("worldRadius", worldRadius);
+      produceHeightmap();
+    }
 
     ImGui::End();
 
@@ -207,5 +195,83 @@ int main() {
   glfwTerminate();
 
   return 0;
+}
+
+void resizeCallback(GLFWwindow* window, int width, int height) {
+  glViewport(0, 0, width, height);
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+  static float prevScale = 1.f;
+  float scale = prevScale + yoffset * scaleAmount;
+  scale = std::clamp(scale, scaleLimit.x, scaleLimit.y);
+  float scaleFactor = scale / prevScale;
+  scaleMat = glm::scale(scaleMat, vec3(scaleFactor));
+  prevScale = scale;
+}
+
+void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos) {
+  static bool isHoldingButton = false;
+  static vec3 prevPos = {0.f, 0.f, 0.f};
+
+  vec3 currPos = {xpos, ypos, 0.f};
+
+  if (!imguiHovered) {
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+      vec3 toMove = (currPos - prevPos * glm::sign(currPos)) * dt * panMoveScale;
+      toMove.y *= -1.f;
+      translateMat = glm::translate(translateMat, toMove);
+    }
+  }
+
+  prevPos = currPos;
+}
+
+bool isImguiHovered(const vec2& mouse) {
+  auto& io = ImGui::GetIO();
+  return io.WantCaptureMouse || io.WantCaptureKeyboard;
+}
+
+void produceHeightmap() {
+  int w, h, colorChannels;
+  stbi_set_flip_vertically_on_load(true);
+  byte* pixels = stbi_load("heightmap2560.png", &w, &h, &colorChannels, 0);
+
+  u32 texHeightmap;
+  glGenTextures(1, &texHeightmap);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texHeightmap);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
+  stbi_image_free(pixels);
+
+  u32 texOutput;
+  glGenTextures(1, &texOutput);
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, texOutput);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0, GL_RGBA, GL_FLOAT, NULL);
+  glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+
+  pixels = new byte[w * h * 4];
+
+  printf("Creating normalmap0.png (%dx%d)...\n", w, h);
+  glDispatchCompute(w, h, 1);
+  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+  glActiveTexture(GL_TEXTURE2);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+  stbi_flip_vertically_on_write(true);
+  stbi_write_png("normalmap0.png", w, h, 4, pixels, w * 4);
+
+  puts("Done");
+  glBindTexture(GL_TEXTURE_2D, 0);
+  delete[] pixels;
 }
 
