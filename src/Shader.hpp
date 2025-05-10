@@ -14,6 +14,7 @@ public:
   void use() const;
 
   void setUniform1f(const GLint& loc, const float& n)          const;
+  void setUniform2f(const GLint& loc, const vec2& v)           const;
   void setUniform3f(const GLint& loc, const vec3& v)           const;
   void setUniform4f(const GLint& loc, const vec4& v)           const;
   void setUniform2i(const GLint& loc, const ivec2& v)          const;
@@ -21,6 +22,7 @@ public:
   void setUniformTexture(const GLint& loc, const GLuint& unit) const;
 
   void setUniform1f(const std::string& name, const float& n)          const;
+  void setUniform2f(const std::string& name, const vec2& v)           const;
   void setUniform3f(const std::string& name, const vec3& v)           const;
   void setUniform4f(const std::string& name, const vec4& v)           const;
   void setUniform2i(const std::string& name, const ivec2& v)          const;

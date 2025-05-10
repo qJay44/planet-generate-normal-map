@@ -3,15 +3,30 @@
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(rgba32f, binding = 2) uniform image2D image;
 
-layout(binding = 0) uniform sampler2D heightmap;
+layout(binding = 0) uniform sampler2D heightmap0;
+layout(binding = 1) uniform sampler2D heightmap1;
 
-layout(location = 0) uniform float seaLevel;
-layout(location = 1) uniform float heightMultiplier;
-layout(location = 2) uniform float worldRadius;
+uniform float seaLevel;
+uniform float heightMultiplier;
+uniform float worldRadius;
+uniform vec2 offset;
 
 #define PI 3.141592265359f
 
-ivec2 mapSize = imageSize(image);
+ivec2 mapSize = imageSize(image) * ivec2(2, 1);
+
+float getHeightmapValue(vec2 globalUV) {
+  float idx = round(globalUV.x);
+  vec2 uv = globalUV;
+  uv.x = (uv.x - 0.5f) * 2.f * idx + uv.x * 2.f * (1.f - idx);
+
+  float heightmaps[2] = float[2](
+    texture(heightmap0, uv).r,
+    texture(heightmap1, uv).r
+  );
+
+  return heightmaps[uint(idx)];
+}
 
 vec3 calculateWorldPoint(ivec2 texCoord) {
   texCoord = (texCoord + mapSize) % mapSize;
@@ -22,14 +37,14 @@ vec3 calculateWorldPoint(ivec2 texCoord) {
   float r = cos(coord.y);
   vec3 spherePoint = vec3(sin(coord.x) * r, sin(coord.y), -cos(coord.x) * r);
 
-  float height = texture(heightmap, uv).r;
+  float height = getHeightmapValue(uv);
   float worldHeight = worldRadius + (height - seaLevel) * heightMultiplier;
 
   return spherePoint * worldHeight;
 }
 
 void main() {
-  const ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy) + ivec2(offset);
   vec3 posNorth = calculateWorldPoint(texCoord + ivec2( 0,  1));
   vec3 posSouth = calculateWorldPoint(texCoord + ivec2( 0, -1));
   vec3 posEast  = calculateWorldPoint(texCoord + ivec2( 1,  0));
@@ -39,7 +54,7 @@ void main() {
   vec3 dirEast = normalize(posEast - posWest);
   vec3 normal = normalize(cross(dirNorth, dirEast));
 
-  float height = texture(heightmap, vec2(texCoord) / vec2(mapSize)).r;
-  imageStore(image, texCoord, vec4(normal, height));
+  float height = getHeightmapValue(vec2(texCoord) / vec2(mapSize));
+  imageStore(image, texCoord - ivec2(offset), vec4(normal, height));
 }
 
