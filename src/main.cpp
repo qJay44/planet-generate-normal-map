@@ -75,9 +75,9 @@ int main() {
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init();
 
-  float seaLevel = -20.f;
-  float heightMutliplier = 12.f;
-  float worldRadius = 50.f;
+  float seaLevel = -10.f;
+  float heightMutliplier = 40.f;
+  float worldRadius = 40.f;
 
   Shader mainShader("main.vert", "main.frag");
   Shader mainComputeShader("main.comp");
@@ -173,11 +173,17 @@ int main() {
     ImGui::SliderFloat("seaLevel", &seaLevel, -100.f, 100.f);
     ImGui::SliderFloat("heightMutliplier", &heightMutliplier, 0.f, 100.f);
     ImGui::SliderFloat("worldRadius", &worldRadius, 1.f, 100.f);
+
     if (ImGui::Button("Produce (21600x12800)")) {
       mainComputeShader.setUniform1f("seaLevel", seaLevel);
       mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
       mainComputeShader.setUniform1f("worldRadius", worldRadius);
       produceHeightmap(mainComputeShader);
+    }
+
+    if (ImGui::Button("Reset View")) {
+      scaleMat = mat4(1.f);
+      translateMat = mat4(1.f);
     }
 
     ImGui::End();

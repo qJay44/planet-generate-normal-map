@@ -1,14 +1,14 @@
-#version 460 core
+// For GLSLS Viewer tests
 
-in vec2 texCoordUV;
+#version 460 core
 
 out vec4 FragColor;
 
 layout(binding = 0) uniform sampler2D heightmap;
 
-layout(location = 2) uniform float seaLevel;
-layout(location = 3) uniform float heightMutliplier;
-layout(location = 4) uniform float worldRadius;
+const float seaLevel = -10.f;
+const float heightMutliplier = 40.f;
+const float worldRadius = 40.f;
 
 #define PI 3.141592265359f
 
@@ -30,7 +30,7 @@ vec3 calculateWorldPoint(ivec2 texCoord) {
 }
 
 void main() {
-  const ivec2 texCoord = ivec2(texCoordUV * vec2(mapSize));
+  const ivec2 texCoord = ivec2(gl_FragCoord.xy * (vec2(2560, 1280) / vec2(1600, 900)));
   vec3 posNorth = calculateWorldPoint(texCoord + ivec2( 0,  1));
   vec3 posSouth = calculateWorldPoint(texCoord + ivec2( 0, -1));
   vec3 posEast  = calculateWorldPoint(texCoord + ivec2( 1,  0));
@@ -39,6 +39,7 @@ void main() {
   vec3 dirNorth = normalize(posNorth - posSouth);
   vec3 dirEast = normalize(posEast - posWest);
   vec3 normal = normalize(cross(dirNorth, dirEast));
+
   normal = (normal + 1.f) * 0.5f;
 
   float height = texture(heightmap, vec2(texCoord) / vec2(mapSize)).r;
