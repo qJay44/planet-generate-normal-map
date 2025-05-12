@@ -1,6 +1,6 @@
-// For GLSLS Viewer tests
-
 #version 460 core
+
+// For GLSLS Viewer tests
 
 out vec4 FragColor;
 

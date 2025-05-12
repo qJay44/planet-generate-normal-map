@@ -31,7 +31,7 @@ void mouseCursorCallback(GLFWwindow* window, double xpos, double ypos);
 
 bool isImguiHovered(const vec2& mouse);
 
-void produceHeightmap(const Shader& shader);
+void produceHeightmap(const Shader& shader, const char* name);
 
 int main() {
   // Assuming the executable is launching from its own directory
@@ -174,11 +174,18 @@ int main() {
     ImGui::SliderFloat("heightMutliplier", &heightMutliplier, 0.f, 100.f);
     ImGui::SliderFloat("worldRadius", &worldRadius, 1.f, 100.f);
 
+    if (ImGui::Button("Produce (2560x1280)  ")) {
+      mainComputeShader.setUniform1f("seaLevel", seaLevel);
+      mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
+      mainComputeShader.setUniform1f("worldRadius", worldRadius);
+      produceHeightmap(mainComputeShader, "heightmap2560.png");
+    }
+
     if (ImGui::Button("Produce (21600x12800)")) {
       mainComputeShader.setUniform1f("seaLevel", seaLevel);
       mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
       mainComputeShader.setUniform1f("worldRadius", worldRadius);
-      produceHeightmap(mainComputeShader);
+      produceHeightmap(mainComputeShader, "heightmap21600.png");
     }
 
     if (ImGui::Button("Reset View")) {
@@ -238,12 +245,12 @@ bool isImguiHovered(const vec2& mouse) {
   return io.WantCaptureMouse || io.WantCaptureKeyboard;
 }
 
-void produceHeightmap(const Shader& shader) {
+void produceHeightmap(const Shader& shader, const char* name) {
   constexpr int GLchannels[4] = {GL_RED, GL_RG, GL_RGB, GL_RGBA};
 
   int w, h, channels;
   stbi_set_flip_vertically_on_load(true);
-  byte* pixels = stbi_load("heightmap21600.png", &w, &h, &channels, 0);
+  byte* pixels = stbi_load(name, &w, &h, &channels, 0);
   int w2 = w / 2;
   byte* pixels01 = pixels;
   int heightmapColorChannel = GLchannels[channels - 1];
@@ -282,8 +289,8 @@ void produceHeightmap(const Shader& shader) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w2, h, 0, GL_RGBA, GL_FLOAT, NULL);
-  glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8_SNORM, w2, h, 0, GL_RGBA, GL_FLOAT, NULL);
+  glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8_SNORM);
 
   byte* pixelsNormalmap = new byte[w2 * h * 4];
   stbi_flip_vertically_on_write(true);
@@ -293,7 +300,7 @@ void produceHeightmap(const Shader& shader) {
   glDispatchCompute(w2, h, 1);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   glActiveTexture(GL_TEXTURE2);
-  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelsNormalmap);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_BYTE, pixelsNormalmap);
   stbi_write_png("normalmap0.png", w2, h, 4, pixelsNormalmap, w2 * 4);
 
   printf("Creating normalmap1.png (%dx%d)...\n", w2, h);
@@ -301,7 +308,7 @@ void produceHeightmap(const Shader& shader) {
   glDispatchCompute(w2, h, 1);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   glActiveTexture(GL_TEXTURE2);
-  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelsNormalmap);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_BYTE, pixelsNormalmap);
   stbi_write_png("normalmap1.png", w2, h, 4, pixelsNormalmap, w2 * 4);
 
   puts("Done");

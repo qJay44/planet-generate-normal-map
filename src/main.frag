@@ -39,6 +39,7 @@ void main() {
   vec3 dirNorth = normalize(posNorth - posSouth);
   vec3 dirEast = normalize(posEast - posWest);
   vec3 normal = normalize(cross(dirNorth, dirEast));
+
   normal = (normal + 1.f) * 0.5f;
 
   float height = texture(heightmap, vec2(texCoord) / vec2(mapSize)).r;
