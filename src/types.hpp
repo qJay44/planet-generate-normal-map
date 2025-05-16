@@ -14,6 +14,7 @@ typedef int32_t s32;
 typedef int64_t s64;
 
 typedef u8 byte;
+typedef s8 sbyte;
 
 typedef std::filesystem::path fspath;
 

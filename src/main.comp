@@ -1,7 +1,7 @@
 #version 460 core
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(rgba8_snorm, binding = 2) uniform image2D image;
+layout(rgba16f, binding = 2) writeonly uniform image2D image;
 
 layout(binding = 0) uniform sampler2D heightmap0;
 layout(binding = 1) uniform sampler2D heightmap1;
@@ -53,6 +53,9 @@ void main() {
   vec3 dirNorth = normalize(posNorth - posSouth);
   vec3 dirEast = normalize(posEast - posWest);
   vec3 normal = normalize(cross(dirNorth, dirEast));
+
+  normal = (normal + 1.f) * 0.5f;
+  normal = normalize(normal);
 
   float height = getHeightmapValue(vec2(texCoord) / vec2(mapSize));
   imageStore(image, texCoord - ivec2(offset), vec4(normal, height));

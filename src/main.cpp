@@ -78,10 +78,14 @@ int main() {
   float seaLevel = -10.f;
   float heightMutliplier = 40.f;
   float worldRadius = 40.f;
+  float sobelScale = 5.f;
 
   Shader mainShader("main.vert", "main.frag");
+  Shader sobelShader("main.vert", "sobel.frag");
   Shader mainComputeShader("main.comp");
+  Shader sobelComputeShader("sobel.comp");
   mainShader.setUniformTexture(0, 0);
+  sobelShader.setUniformTexture(0, 0);
 
   int w, h, colorChannels;
   stbi_set_flip_vertically_on_load(true);
@@ -154,44 +158,69 @@ int main() {
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
       glfwSetWindowShouldClose(window, GLFW_TRUE);
 
-    mainShader.setUniformMatrix4f(0, translateMat);
-    mainShader.setUniformMatrix4f(1, scaleMat);
-    mainShader.setUniform1f(2, seaLevel);
-    mainShader.setUniform1f(3, heightMutliplier);
-    mainShader.setUniform1f(4, worldRadius);
-
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, heightmapTexture);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
     ImGui::Begin("Settings");
+
+    static int rbComputeType = 0;
+    ImGui::RadioButton("Main", &rbComputeType, 0); ImGui::SameLine();
+    ImGui::SetItemTooltip("Showing in range [0, 1], producing in range [-1, 1]");
+    ImGui::RadioButton("Sobel", &rbComputeType, 1);
+    ImGui::SetItemTooltip("Showing in range [0, 1], producing in range [-1, 1]");
 
     ImGui::SliderFloat("seaLevel", &seaLevel, -100.f, 100.f);
     ImGui::SliderFloat("heightMutliplier", &heightMutliplier, 0.f, 100.f);
     ImGui::SliderFloat("worldRadius", &worldRadius, 1.f, 100.f);
 
+    ImGui::BeginDisabled(rbComputeType != 1);
+    ImGui::SliderFloat("Sobel scale", &sobelScale, 0.01f, 100.f);
+    ImGui::EndDisabled();
+
     if (ImGui::Button("Produce (2560x1280)  ")) {
       mainComputeShader.setUniform1f("seaLevel", seaLevel);
       mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
       mainComputeShader.setUniform1f("worldRadius", worldRadius);
-      produceHeightmap(mainComputeShader, "heightmap2560.png");
+
+      if (rbComputeType == 0)
+        produceHeightmap(mainComputeShader, "heightmap2560.png");
+      else if (rbComputeType == 1)
+        produceHeightmap(sobelComputeShader, "heightmap2560.png");
     }
 
     if (ImGui::Button("Produce (21600x12800)")) {
       mainComputeShader.setUniform1f("seaLevel", seaLevel);
       mainComputeShader.setUniform1f("heightMultiplier", heightMutliplier);
       mainComputeShader.setUniform1f("worldRadius", worldRadius);
-      produceHeightmap(mainComputeShader, "heightmap21600.png");
+
+      if (rbComputeType == 0)
+        produceHeightmap(mainComputeShader, "heightmap21600.png");
+      else if (rbComputeType == 1)
+        produceHeightmap(sobelComputeShader, "heightmap21600.png");
     }
 
     if (ImGui::Button("Reset View")) {
       scaleMat = mat4(1.f);
       translateMat = mat4(1.f);
     }
+
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    if (rbComputeType == 0) {
+      mainShader.setUniformMatrix4f(0, translateMat);
+      mainShader.setUniformMatrix4f(1, scaleMat);
+      mainShader.setUniform1f(2, seaLevel);
+      mainShader.setUniform1f(3, heightMutliplier);
+      mainShader.setUniform1f(4, worldRadius);
+    } else if (rbComputeType == 1) {
+      sobelComputeShader.setUniform1f("scale", sobelScale);
+      sobelShader.setUniformMatrix4f(0, translateMat);
+      sobelShader.setUniformMatrix4f(1, scaleMat);
+      sobelShader.setUniform1f(2, sobelScale);
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, heightmapTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     ImGui::End();
 
@@ -247,6 +276,7 @@ bool isImguiHovered(const vec2& mouse) {
 
 void produceHeightmap(const Shader& shader, const char* name) {
   constexpr int GLchannels[4] = {GL_RED, GL_RG, GL_RGB, GL_RGBA};
+  shader.use();
 
   int w, h, channels;
   stbi_set_flip_vertically_on_load(true);
@@ -289,10 +319,10 @@ void produceHeightmap(const Shader& shader, const char* name) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8_SNORM, w2, h, 0, GL_RGBA, GL_FLOAT, NULL);
-  glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8_SNORM);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w2, h, 0, GL_RGBA, GL_BYTE, NULL);
+  glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
 
-  byte* pixelsNormalmap = new byte[w2 * h * 4];
+  sbyte* pixelsNormalmap = new sbyte[w2 * h * 4];
   stbi_flip_vertically_on_write(true);
 
   printf("Creating normalmap0.png (%dx%d)...\n", w2, h);
