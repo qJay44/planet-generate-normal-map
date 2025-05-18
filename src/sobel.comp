@@ -49,7 +49,7 @@ void main() {
   normal.x = scale * -(tc2 - tc0 + 2.f * (tc5 - tc3) + tc8 - tc6);
   normal.y = scale * -(tc6 - tc0 + 2.f * (tc7 - tc1) + tc8 - tc2);
   normal.z = 1.f;
-  normal = normalize(normal);
+  normal = normalize(normal) * 0.5f + 0.5f;
 
   imageStore(image, texCoord - ivec2(offset), vec4(normal, tc4));
 }

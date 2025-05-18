@@ -55,7 +55,6 @@ void main() {
   vec3 normal = normalize(cross(dirNorth, dirEast));
 
   normal = (normal + 1.f) * 0.5f;
-  normal = normalize(normal);
 
   float height = getHeightmapValue(vec2(texCoord) / vec2(mapSize));
   imageStore(image, texCoord - ivec2(offset), vec4(normal, height));

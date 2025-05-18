@@ -162,16 +162,16 @@ int main() {
 
     static int rbComputeType = 0;
     ImGui::RadioButton("Main", &rbComputeType, 0); ImGui::SameLine();
-    ImGui::SetItemTooltip("Showing in range [0, 1], producing in range [-1, 1]");
     ImGui::RadioButton("Sobel", &rbComputeType, 1);
-    ImGui::SetItemTooltip("Showing in range [0, 1], producing in range [-1, 1]");
 
+    ImGui::BeginDisabled(rbComputeType != 0);
     ImGui::SliderFloat("seaLevel", &seaLevel, -100.f, 100.f);
     ImGui::SliderFloat("heightMutliplier", &heightMutliplier, 0.f, 100.f);
     ImGui::SliderFloat("worldRadius", &worldRadius, 1.f, 100.f);
+    ImGui::EndDisabled();
 
     ImGui::BeginDisabled(rbComputeType != 1);
-    ImGui::SliderFloat("Sobel scale", &sobelScale, 0.01f, 100.f);
+    ImGui::SliderFloat("Sobel scale", &sobelScale, -100.f, 100.f);
     ImGui::EndDisabled();
 
     if (ImGui::Button("Produce (2560x1280)  ")) {
@@ -322,7 +322,7 @@ void produceHeightmap(const Shader& shader, const char* name) {
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w2, h, 0, GL_RGBA, GL_BYTE, NULL);
   glBindImageTexture(2, texOutput, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
 
-  sbyte* pixelsNormalmap = new sbyte[w2 * h * 4];
+  byte* pixelsNormalmap = new byte[w2 * h * 4];
   stbi_flip_vertically_on_write(true);
 
   printf("Creating normalmap0.png (%dx%d)...\n", w2, h);
@@ -330,7 +330,7 @@ void produceHeightmap(const Shader& shader, const char* name) {
   glDispatchCompute(w2, h, 1);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   glActiveTexture(GL_TEXTURE2);
-  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_BYTE, pixelsNormalmap);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelsNormalmap);
   stbi_write_png("normalmap0.png", w2, h, 4, pixelsNormalmap, w2 * 4);
 
   printf("Creating normalmap1.png (%dx%d)...\n", w2, h);
@@ -338,7 +338,7 @@ void produceHeightmap(const Shader& shader, const char* name) {
   glDispatchCompute(w2, h, 1);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   glActiveTexture(GL_TEXTURE2);
-  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_BYTE, pixelsNormalmap);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelsNormalmap);
   stbi_write_png("normalmap1.png", w2, h, 4, pixelsNormalmap, w2 * 4);
 
   puts("Done");
