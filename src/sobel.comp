@@ -25,7 +25,7 @@ float getHeightmapValue(vec2 globalUV) {
 }
 
 float getNeighbourHeight(ivec2 texCoord) {
-  vec2 globalUV = vec2((texCoord + mapSize) % mapSize) / mapSize;
+  vec2 globalUV = vec2((texCoord + mapSize) % mapSize) / (vec2(mapSize) - 1.f);
   return getHeightmapValue(globalUV);
 }
 
